@@ -78,7 +78,7 @@ class _ByteProgress:
 def main(argv=None):
     """Download lesson videos into content-ID directories and write the Wistia catalog."""
 
-    # Three positionals: cookietruck session, course export, and the output directory.
+    # Three positionals: cookietruck session (https://github.com/dsoprea/cookietruck), course export, and the output directory.
     parser = argparse.ArgumentParser(
         prog=cggt.config.entrypoint.cggt_export_course_videos.PROG_NAME,
         description="Download lesson M3U8 files and videos from a cggt_export_course JSON file.")

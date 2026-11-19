@@ -19,7 +19,7 @@ class PlayerClient:
     """GET JSON and download files, optionally sending a session cookie."""
 
     def __init__(self, cookie_header):
-        """Store the Cookie header value from a cookietruck session."""
+        """Store the Cookie header value from a cookietruck session (https://github.com/dsoprea/cookietruck)."""
 
         self._cookie_header = cookie_header
 

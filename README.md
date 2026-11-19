@@ -32,7 +32,7 @@ cggt_export_course COURSE_ID
 cggt_export_course_videos SESSION_FILEPATH COURSE_EXPORT_FILEPATH OUTPUT_DIRECTORY_PATH
 ```
 
-`cggt_course_list` writes a table to stderr. `cggt_export_course` writes JSON to stdout. `cggt_export_course_videos` does not use the Admin API token. `SESSION_FILEPATH` is cookietruck JSON with a `cookie_header` string. Progress and skip lines go to stderr.
+`cggt_course_list` writes a table to stderr. `cggt_export_course` writes JSON to stdout. `cggt_export_course_videos` does not use the Admin API token. `SESSION_FILEPATH` is [cookietruck](https://github.com/dsoprea/cookietruck) JSON with a `cookie_header` string. Progress and skip lines go to stderr.
 
 ## Test
 
