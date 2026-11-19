@@ -1,0 +1,29 @@
+[project]
+name = "cggt"
+version = "0.0.1"
+description = "Read Thinkific courses and export course content."
+requires-python = ">=3.14"
+dependencies = [
+  "tabulate",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+
+[project.scripts]
+cggt_course_list = "cggt.entrypoint.cggt_course_list:main"
+cggt_export_course = "cggt.entrypoint.cggt_export_course:main"
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--import-mode=importlib"

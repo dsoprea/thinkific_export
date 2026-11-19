@@ -1,0 +1,1 @@
+"""Thinkific course catalog tools."""
