@@ -21,7 +21,10 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         prog=cggt.config.entrypoint.cggt_export_course.PROG_NAME,
         description="Export one Thinkific course content hierarchy as JSON.")
-    parser.add_argument("course_id", type=int)
+    parser.add_argument(
+        "course_id",
+        type=int,
+        help="Thinkific course ID to export.")
     parsed_arguments = parser.parse_args(argv)
     access_token, _signing_secret = cggt.config.thinkific.load_thinkific_credentials()
     thinkific_client = cggt.course.thinkific_client.ThinkificClient(access_token)

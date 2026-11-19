@@ -5,6 +5,7 @@ description = "Read Thinkific courses and export course content."
 requires-python = ">=3.14"
 dependencies = [
   "tabulate",
+  "tqdm",
 ]
 
 [project.optional-dependencies]
@@ -15,6 +16,7 @@ dev = [
 [project.scripts]
 cggt_course_list = "cggt.entrypoint.cggt_course_list:main"
 cggt_export_course = "cggt.entrypoint.cggt_export_course:main"
+cggt_export_course_videos = "cggt.entrypoint.cggt_export_course_videos:main"
 
 [build-system]
 requires = ["setuptools>=69"]
