@@ -152,10 +152,13 @@ def download_lesson_files(player_client, job, output_directory_path, progress, r
         for download in job["downloads"]:
             destination_filepath = os.path.join(temp_directory_path, download["filename"])
             report_operation("downloading {url}".format(url=download["url"]))
+            download_progress = progress
+            if ".m3u8" in download["url"]:
+                download_progress = _ignore_download_progress
             player_client.download_file(
                 download["url"],
                 destination_filepath,
-                progress)
+                download_progress)
         metadata_filepath = os.path.join(temp_directory_path, "metadata.json")
         report_operation("writing {filepath}".format(filepath=metadata_filepath))
         _write_json(metadata_filepath, {
@@ -176,6 +179,12 @@ def download_lesson_files(player_client, job, output_directory_path, progress, r
         shutil.copytree(temp_directory_path, content_directory_path)
     finally:
         shutil.rmtree(temp_directory_path)
+
+
+def _ignore_download_progress(chunk_byte_count, content_length):
+    """Drop byte progress for M3U8 playlist files."""
+
+    return None
 
 
 def _iterate_lesson_contents(course_document):

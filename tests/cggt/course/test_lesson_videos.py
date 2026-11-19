@@ -75,6 +75,7 @@ class _FakePlayerClient:
         """Start with no downloads."""
 
         self.downloaded_urls = []
+        self.progress_callback_ids = []
 
     def get_json(self, url, send_cookie):
         """Return the course, lesson, or media document for the test URLs."""
@@ -113,10 +114,25 @@ class _FakePlayerClient:
         """Write the URL text and report a fixed length."""
 
         self.downloaded_urls.append(url)
+        self.progress_callback_ids.append(id(on_chunk))
         on_chunk(0, 4)
         with open(destination_filepath, "w", encoding="utf-8") as destination_file:
             destination_file.write("data")
         on_chunk(4, None)
+
+
+class _RecordingProgress:
+    """Counts byte-progress calls for non-playlist downloads."""
+
+    def __init__(self):
+        """Start with no calls."""
+
+        self.call_count = 0
+
+    def __call__(self, chunk_byte_count, content_length):
+        """Count one progress report."""
+
+        self.call_count = self.call_count + 1
 
 
 def _ignore_operation(message):
@@ -184,12 +200,17 @@ def test_download_and_catalog_then_skip_and_merge(tmp_path):
         jobs,
         _ignore_operation)
     assert cggt.course.lesson_videos.is_content_directory_present(output_directory_path, 11) is False
+    recording_progress = _RecordingProgress()
     cggt.course.lesson_videos.download_lesson_files(
         client,
         jobs[0],
         output_directory_path,
-        lambda chunk_byte_count, content_length: None,
+        recording_progress,
         _ignore_operation)
+    assert recording_progress.call_count == 2
+    assert client.progress_callback_ids[0] != id(recording_progress)
+    assert client.progress_callback_ids[1] != id(recording_progress)
+    assert client.progress_callback_ids[2] == id(recording_progress)
     content_directory_path = os.path.join(output_directory_path, "11")
     assert os.path.isfile(os.path.join(content_directory_path, "playlist.m3u8"))
     assert os.path.isfile(os.path.join(content_directory_path, "video.mp4"))
