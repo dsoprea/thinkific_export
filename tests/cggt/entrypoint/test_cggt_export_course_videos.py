@@ -6,7 +6,7 @@ import os
 import cggt.entrypoint.cggt_export_course_videos
 
 
-def _collect_one_job(player_client, course_document, report_operation):
+def _collect_one_job(player_client, course_document, report_operation, open_resolve_progress):
     """Return one video job and one lesson without video."""
 
     return (

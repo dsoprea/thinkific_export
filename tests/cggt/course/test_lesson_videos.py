@@ -125,6 +125,26 @@ def _ignore_operation(message):
     return None
 
 
+class _IgnoreResolveProgress:
+    """Resolve progress that records nothing."""
+
+    def advance(self, lesson_name):
+        """Ignore one lesson."""
+
+        return None
+
+    def close(self):
+        """Ignore close."""
+
+        return None
+
+
+def _open_ignore_resolve_progress(total):
+    """Return a resolve progress that records nothing."""
+
+    return _IgnoreResolveProgress()
+
+
 def test_collect_lesson_video_jobs_omits_lessons_without_video():
     """Only the lesson with a Wistia ID becomes a job, and the high bitrate file is chosen."""
 
@@ -132,7 +152,8 @@ def test_collect_lesson_video_jobs_omits_lessons_without_video():
     jobs, lessons_without_video = cggt.course.lesson_videos.collect_lesson_video_jobs(
         client,
         _build_course_document(),
-        _ignore_operation)
+        _ignore_operation,
+        _open_ignore_resolve_progress)
 
     assert len(jobs) == 1
     assert jobs[0]["content_id"] == 11
@@ -156,7 +177,8 @@ def test_download_and_catalog_then_skip_and_merge(tmp_path):
     jobs, _lessons_without_video = cggt.course.lesson_videos.collect_lesson_video_jobs(
         client,
         _build_course_document(),
-        _ignore_operation)
+        _ignore_operation,
+        _open_ignore_resolve_progress)
     cggt.course.lesson_videos.write_wistia_catalog(
         output_directory_path,
         jobs,

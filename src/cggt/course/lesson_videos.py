@@ -28,7 +28,7 @@ class LessonVideoExportError(Exception):
     """The course export cannot be resolved into lesson videos."""
 
 
-def collect_lesson_video_jobs(player_client, course_document, report_operation):
+def collect_lesson_video_jobs(player_client, course_document, report_operation, open_resolve_progress):
     """Return video jobs and lessons that have no Wistia video.
 
     Each job is a dict with ``content_id``, ``lesson_name``, ``wistia_id``,
@@ -43,65 +43,70 @@ def collect_lesson_video_jobs(player_client, course_document, report_operation):
     lesson_id_by_content_id = _build_lesson_id_by_content_id(course_payload)
     jobs = []
     lessons_without_video = []
-    for content_record in _iterate_lesson_contents(course_document):
-        content_id = content_record["id"]
-        lesson_name = content_record["name"]
-        try:
-            lesson_id = lesson_id_by_content_id[content_id]
-        except KeyError:
-            lessons_without_video.append({
-                "content_id": content_id,
-                "lesson_name": lesson_name,
-            })
+    lesson_contents = list(_iterate_lesson_contents(course_document))
+    resolve_progress = open_resolve_progress(len(lesson_contents))
+    try:
+        for content_record in lesson_contents:
+            content_id = content_record["id"]
+            lesson_name = content_record["name"]
+            try:
+                lesson_id = lesson_id_by_content_id[content_id]
+            except KeyError:
+                lessons_without_video.append({
+                    "content_id": content_id,
+                    "lesson_name": lesson_name,
+                })
+                resolve_progress.advance(lesson_name)
 
-            continue
-        lesson_url = _COURSE_PLAYER_LESSON_URL_FORMAT.format(host=site_host, lesson_id=lesson_id)
-        report_operation("GET {url}".format(url=lesson_url))
-        lesson_payload = player_client.get_json(lesson_url, True)
-        play_url = _read_play_url(lesson_payload)
-        if play_url is None:
-            lessons_without_video.append({
-                "content_id": content_id,
-                "lesson_name": lesson_name,
-            })
+                continue
+            lesson_url = _COURSE_PLAYER_LESSON_URL_FORMAT.format(host=site_host, lesson_id=lesson_id)
+            lesson_payload = player_client.get_json(lesson_url, True)
+            play_url = _read_play_url(lesson_payload)
+            if play_url is None:
+                lessons_without_video.append({
+                    "content_id": content_id,
+                    "lesson_name": lesson_name,
+                })
+                resolve_progress.advance(lesson_name)
 
-            continue
-        report_operation("GET {url}".format(url=play_url))
-        play_html = player_client.get_text(play_url, True)
-        wistia_id = _read_wistia_hashed_id(play_html, content_id)
-        media_url = WISTIA_MEDIA_URL_FORMAT.format(wistia_id=wistia_id)
-        report_operation("GET {url}".format(url=media_url))
-        media_document = player_client.get_json(media_url, False)
-        playlist_urls, progressive_url = _select_video_urls(media_document)
-        playlist_url = WISTIA_PLAYLIST_URL_FORMAT.format(wistia_id=wistia_id)
-        if playlist_url not in playlist_urls:
-            playlist_urls.insert(0, playlist_url)
-        video_urls = list(playlist_urls)
-        downloads = []
-        used_names = set()
-        for playlist in playlist_urls:
-            downloads.append({
-                "url": playlist,
-                "filename": _build_download_filename(playlist, used_names),
+                continue
+            play_html = player_client.get_text(play_url, True)
+            wistia_id = _read_wistia_hashed_id(play_html, content_id)
+            media_url = WISTIA_MEDIA_URL_FORMAT.format(wistia_id=wistia_id)
+            media_document = player_client.get_json(media_url, False)
+            playlist_urls, progressive_url = _select_video_urls(media_document)
+            playlist_url = WISTIA_PLAYLIST_URL_FORMAT.format(wistia_id=wistia_id)
+            if playlist_url not in playlist_urls:
+                playlist_urls.insert(0, playlist_url)
+            video_urls = list(playlist_urls)
+            downloads = []
+            used_names = set()
+            for playlist in playlist_urls:
+                downloads.append({
+                    "url": playlist,
+                    "filename": _build_download_filename(playlist, used_names),
+                })
+            if progressive_url is not None:
+                video_urls.append(progressive_url)
+                downloads.append({
+                    "url": progressive_url,
+                    "filename": "video.mp4",
+                })
+            video_id, video_identifier = _read_video_ids(lesson_payload)
+            jobs.append({
+                "content_id": content_id,
+                "lesson_id": lesson_id,
+                "lesson_name": lesson_name,
+                "video_id": video_id,
+                "video_identifier": video_identifier,
+                "wistia_id": wistia_id,
+                "media_document": media_document,
+                "video_urls": video_urls,
+                "downloads": downloads,
             })
-        if progressive_url is not None:
-            video_urls.append(progressive_url)
-            downloads.append({
-                "url": progressive_url,
-                "filename": "video.mp4",
-            })
-        video_id, video_identifier = _read_video_ids(lesson_payload)
-        jobs.append({
-            "content_id": content_id,
-            "lesson_id": lesson_id,
-            "lesson_name": lesson_name,
-            "video_id": video_id,
-            "video_identifier": video_identifier,
-            "wistia_id": wistia_id,
-            "media_document": media_document,
-            "video_urls": video_urls,
-            "downloads": downloads,
-        })
+            resolve_progress.advance(lesson_name)
+    finally:
+        resolve_progress.close()
 
     return jobs, lessons_without_video
 

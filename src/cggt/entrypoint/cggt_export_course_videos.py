@@ -11,6 +11,41 @@ import cggt.course.lesson_videos
 import cggt.course.player_client
 
 
+class _ResolveProgress:
+    """One stderr bar for resolving every lesson video."""
+
+    def __init__(self, total):
+        """Open a bar whose total is the lesson count."""
+
+        self._total = total
+        self._number = 0
+        self._bar = tqdm.tqdm(
+            total=total,
+            file=sys.stderr)
+
+    def advance(self, lesson_name):
+        """Move the bar one lesson and show its position and name."""
+
+        self._number = self._number + 1
+        description = "{number}/{total} {lesson_name}".format(
+            number=self._number,
+            total=self._total,
+            lesson_name=lesson_name)
+        self._bar.set_description(description)
+        self._bar.update(1)
+
+    def close(self):
+        """Finish the bar."""
+
+        self._bar.close()
+
+
+def _open_resolve_progress(total):
+    """Open the lesson-resolve bar."""
+
+    return _ResolveProgress(total)
+
+
 class _ByteProgress:
     """tqdm bar that grows its total as each file reports Content-Length."""
 
@@ -65,7 +100,8 @@ def main(argv=None):
     jobs, lessons_without_video = cggt.course.lesson_videos.collect_lesson_video_jobs(
         player_client,
         course_document,
-        _report_operation)
+        _report_operation,
+        _open_resolve_progress)
     for lesson in lessons_without_video:
         _report_operation("lesson {content_id} {lesson_name} has no video".format(
             content_id=lesson["content_id"],
