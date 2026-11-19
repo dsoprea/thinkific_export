@@ -72,16 +72,35 @@ def collect_lesson_video_jobs(player_client, course_document, report_operation):
         media_url = WISTIA_MEDIA_URL_FORMAT.format(wistia_id=wistia_id)
         report_operation("GET {url}".format(url=media_url))
         media_document = player_client.get_json(media_url, False)
-        video_urls = _select_video_urls(media_document)
+        playlist_urls, progressive_url = _select_video_urls(media_document)
         playlist_url = WISTIA_PLAYLIST_URL_FORMAT.format(wistia_id=wistia_id)
-        if playlist_url not in video_urls:
-            video_urls.insert(0, playlist_url)
+        if playlist_url not in playlist_urls:
+            playlist_urls.insert(0, playlist_url)
+        video_urls = list(playlist_urls)
+        downloads = []
+        used_names = set()
+        for playlist in playlist_urls:
+            downloads.append({
+                "url": playlist,
+                "filename": _build_download_filename(playlist, used_names),
+            })
+        if progressive_url is not None:
+            video_urls.append(progressive_url)
+            downloads.append({
+                "url": progressive_url,
+                "filename": "video.mp4",
+            })
+        video_id, video_identifier = _read_video_ids(lesson_payload)
         jobs.append({
             "content_id": content_id,
+            "lesson_id": lesson_id,
             "lesson_name": lesson_name,
+            "video_id": video_id,
+            "video_identifier": video_identifier,
             "wistia_id": wistia_id,
             "media_document": media_document,
             "video_urls": video_urls,
+            "downloads": downloads,
         })
 
     return jobs, lessons_without_video
@@ -125,15 +144,22 @@ def download_lesson_files(player_client, job, output_directory_path, progress, r
     # Keep the destination untouched until every file has been written.
     temp_directory_path = tempfile.mkdtemp()
     try:
-        used_names = set()
-        for video_url in job["video_urls"]:
-            filename = _build_download_filename(video_url, used_names)
-            destination_filepath = os.path.join(temp_directory_path, filename)
-            report_operation("downloading {url}".format(url=video_url))
+        for download in job["downloads"]:
+            destination_filepath = os.path.join(temp_directory_path, download["filename"])
+            report_operation("downloading {url}".format(url=download["url"]))
             player_client.download_file(
-                video_url,
+                download["url"],
                 destination_filepath,
                 progress)
+        metadata_filepath = os.path.join(temp_directory_path, "metadata.json")
+        report_operation("writing {filepath}".format(filepath=metadata_filepath))
+        _write_json(metadata_filepath, {
+            "content_id": job["content_id"],
+            "lesson_id": job["lesson_id"],
+            "video_id": job["video_id"],
+            "video_identifier": job["video_identifier"],
+            "wistia_id": job["wistia_id"],
+        })
         content_directory_path = os.path.join(
             output_directory_path,
             str(job["content_id"]))
@@ -216,8 +242,26 @@ def _read_wistia_hashed_id(play_html, content_id):
     return match.group(1)
 
 
+def _read_video_ids(lesson_payload):
+    """Return the lesson video ID and the player video identifier."""
+
+    video_id = lesson_payload["lesson"]["video_id"]
+    video_identifier = None
+    try:
+        videos = lesson_payload["videos"]
+    except KeyError:
+        videos = []
+    for video in videos:
+        if video["id"] == video_id:
+            video_identifier = video["identifier"]
+
+            break
+
+    return video_id, video_identifier
+
+
 def _select_video_urls(media_document):
-    """Return HLS playlist URLs plus the highest-bitrate progressive asset."""
+    """Return HLS playlist URLs and the highest-bitrate progressive asset URL."""
 
     playlist_urls = []
     progressive_url = None
@@ -237,11 +281,8 @@ def _select_video_urls(media_document):
         if progressive_bitrate is None or bitrate > progressive_bitrate:
             progressive_bitrate = bitrate
             progressive_url = asset_url
-    video_urls = list(playlist_urls)
-    if progressive_url is not None and progressive_url not in video_urls:
-        video_urls.append(progressive_url)
 
-    return video_urls
+    return playlist_urls, progressive_url
 
 
 def _load_mapping(mapping_filepath):

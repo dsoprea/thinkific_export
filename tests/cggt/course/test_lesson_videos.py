@@ -94,6 +94,7 @@ class _FakePlayerClient:
                     "video_id": 9,
                     "video_url": "https://creatify.thinkific.com/play/11",
                 },
+                "videos": [{"id": 9, "identifier": "proxy-id"}],
             }
         if url.endswith("/lessons/502"):
             return {"lesson": {"video_id": None, "video_url": None}}
@@ -169,7 +170,13 @@ def test_download_and_catalog_then_skip_and_merge(tmp_path):
         _ignore_operation)
     content_directory_path = os.path.join(output_directory_path, "11")
     assert os.path.isfile(os.path.join(content_directory_path, "playlist.m3u8"))
-    assert os.path.isfile(os.path.join(content_directory_path, "high.mp4"))
+    assert os.path.isfile(os.path.join(content_directory_path, "video.mp4"))
+    metadata = json.loads(open(os.path.join(content_directory_path, "metadata.json"), encoding="utf-8").read())
+    assert metadata["content_id"] == 11
+    assert metadata["lesson_id"] == 501
+    assert metadata["video_id"] == 9
+    assert metadata["video_identifier"] == "proxy-id"
+    assert metadata["wistia_id"] == "abc123"
     assert cggt.course.lesson_videos.is_content_directory_present(output_directory_path, 11) is True
     wistia_filepath = os.path.join(output_directory_path, "wistia", "abc123.json")
     assert json.loads(open(wistia_filepath, encoding="utf-8").read())["media"]["assets"][0]["type"] == "hls_video"
