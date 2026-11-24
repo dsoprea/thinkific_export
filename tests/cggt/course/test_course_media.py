@@ -248,6 +248,7 @@ def test_download_and_catalog_then_skip_and_merge(tmp_path):
         output_directory_path,
         recording_progress,
         _ignore_operation)
+    assert client.send_cookie_flags == [False, False, False]
     assert recording_progress.call_count == 2
     assert client.progress_callback_ids[0] != id(recording_progress)
     assert client.progress_callback_ids[1] != id(recording_progress)

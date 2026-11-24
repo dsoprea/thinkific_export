@@ -120,12 +120,14 @@ def collect_video_jobs(
                 downloads.append({
                     "url": playlist,
                     "filename": _build_download_filename(playlist, used_names),
+                    "send_cookie": False,
                 })
             if progressive_url is not None:
                 video_urls.append(progressive_url)
                 downloads.append({
                     "url": progressive_url,
                     "filename": "video.mp4",
+                    "send_cookie": False,
                 })
             video_id, video_identifier = _read_video_ids(lesson_payload)
             chapter_id = _read_chapter_id(content_record)
@@ -417,11 +419,11 @@ def _download_files_into_content_directory(
             download_progress = progress
             if ".m3u8" in download["url"]:
                 download_progress = _ignore_download_progress
-            send_cookie = True
+            send_cookie = False
             try:
                 send_cookie = download["send_cookie"]
             except KeyError:
-                send_cookie = True
+                send_cookie = False
             player_client.download_file(
                 download["url"],
                 destination_filepath,

@@ -1,7 +1,10 @@
 """HTTP client for the Thinkific course player and Wistia media documents."""
 
+import http.client
 import json
 import logging
+import socket
+import time
 import urllib.error
 import urllib.request
 
@@ -9,6 +12,9 @@ import urllib.request
 _LOGGER = logging.getLogger(__name__)
 
 _CHUNK_BYTE_COUNT = 65536
+_OPEN_TIMEOUT_SECONDS = 300
+_TRANSIENT_OPEN_ATTEMPT_COUNT = 4
+_TRANSIENT_OPEN_RETRY_SLEEP_SECONDS = 2.0
 
 
 class PlayerHttpError(Exception):
@@ -72,16 +78,61 @@ class PlayerClient:
         if send_cookie:
             headers["Cookie"] = self._cookie_header
         request = urllib.request.Request(url, headers=headers, method="GET")
-        try:
-            response = urllib.request.urlopen(request)
-        except urllib.error.HTTPError as error:
-            error_body = error.read().decode("utf-8")
-            message = "HTTP {status} for {url}: {body}".format(
-                status=error.code,
-                url=url,
-                body=error_body)
-            _LOGGER.error(message)
 
-            raise PlayerHttpError(message) from error
+        return self._open_with_transient_retries(request, url)
 
-        return response
+    def _open_with_transient_retries(self, request, url):
+        """Return a response, retrying when the server closes the connection before headers."""
+
+        for attempt_index in range(_TRANSIENT_OPEN_ATTEMPT_COUNT):
+            try:
+                return urllib.request.urlopen(
+                    request,
+                    timeout=_OPEN_TIMEOUT_SECONDS)
+            except urllib.error.HTTPError as error:
+                error_body = error.read().decode("utf-8")
+                message = "HTTP {status} for {url}: {body}".format(
+                    status=error.code,
+                    url=url,
+                    body=error_body)
+                _LOGGER.error(message)
+
+                raise PlayerHttpError(message) from error
+            except urllib.error.URLError as error:
+                if not _is_transient_urlopen_error(error):
+                    raise
+                transient_error = error
+            except (http.client.RemoteDisconnected,
+                    ConnectionResetError,
+                    BrokenPipeError,
+                    TimeoutError,
+                    socket.timeout) as error:
+                transient_error = error
+
+            if attempt_index + 1 >= _TRANSIENT_OPEN_ATTEMPT_COUNT:
+                raise transient_error
+
+            _LOGGER.warning(
+                "transient HTTP error for {url} (attempt {attempt} of {attempt_count}): {error}".format(
+                    url=url,
+                    attempt=attempt_index + 1,
+                    attempt_count=_TRANSIENT_OPEN_ATTEMPT_COUNT,
+                    error=transient_error))
+            time.sleep(_TRANSIENT_OPEN_RETRY_SLEEP_SECONDS)
+
+
+def _is_transient_urlopen_error(error):
+    """Return whether a URLError is a retryable transport failure."""
+
+    reason = error.reason
+    if reason is None:
+        return False
+    if isinstance(reason, (http.client.RemoteDisconnected,
+                           ConnectionResetError,
+                           BrokenPipeError,
+                           TimeoutError,
+                           socket.timeout)):
+
+        return True
+
+    return False
