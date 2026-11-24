@@ -16,7 +16,7 @@ dev = [
 [project.scripts]
 cggt_course_list = "cggt.entrypoint.cggt_course_list:main"
 cggt_export_course = "cggt.entrypoint.cggt_export_course:main"
-cggt_export_course_videos = "cggt.entrypoint.cggt_export_course_videos:main"
+cggt_export_course_media = "cggt.entrypoint.cggt_export_course_media:main"
 
 [build-system]
 requires = ["setuptools>=69"]

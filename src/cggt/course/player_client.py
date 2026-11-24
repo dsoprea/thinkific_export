@@ -39,11 +39,11 @@ class PlayerClient:
 
         return raw_body.decode("utf-8")
 
-    def download_file(self, url, destination_filepath, on_chunk):
+    def download_file(self, url, destination_filepath, on_chunk, send_cookie=False):
         """Stream a URL to ``destination_filepath``. ``on_chunk`` receives each byte count."""
 
         # Open first so the caller can record Content-Length before the body is copied.
-        response = self._open(url, False)
+        response = self._open(url, send_cookie)
         with response:
             content_length = response.headers.get("Content-Length")
             if content_length is not None:
