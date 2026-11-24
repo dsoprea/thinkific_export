@@ -43,32 +43,44 @@ def load_course_list_rows(thinkific_client):
     return rows
 
 
-def load_course_content_document(thinkific_client, course_id):
+def load_course_content_document(thinkific_client, course_id, chapter_progress=None):
     """Return the course, each chapter, and that chapter's contents.
 
     Chapters and contents keep the Thinkific JSON and are ordered by ``position``.
+    When ``chapter_progress`` is set, it receives ``begin``, ``advance``, and ``close`` calls.
     """
 
     # Course first, then one chapter GET and one contents collection per chapter.
     course_record = thinkific_client.get_json(
         "/courses/{course_id}".format(course_id=course_id),
         [])
-    chapter_records = []
-    for chapter_id in course_record["chapter_ids"]:
-        chapter_path = "/chapters/{chapter_id}".format(chapter_id=chapter_id)
-        chapter_record = thinkific_client.get_json(chapter_path, [])
-        chapter_records.append(chapter_record)
-    chapter_records.sort(key=_build_sort_key_for_position)
-    chapters = []
-    for chapter_record in chapter_records:
-        contents_path = "/chapters/{chapter_id}/contents".format(chapter_id=chapter_record["id"])
-        content_records = thinkific_client.list_collection(contents_path, [])
-        content_records.sort(key=_build_sort_key_for_position)
-        chapter_node = {
-            "chapter": chapter_record,
-            "contents": content_records,
-        }
-        chapters.append(chapter_node)
+    chapter_id_list = course_record["chapter_ids"]
+    if chapter_progress is not None:
+        chapter_progress.begin(len(chapter_id_list) + 1)
+    try:
+        if chapter_progress is not None:
+            chapter_progress.advance("course")
+        chapter_records = []
+        for chapter_id in chapter_id_list:
+            chapter_path = "/chapters/{chapter_id}".format(chapter_id=chapter_id)
+            chapter_record = thinkific_client.get_json(chapter_path, [])
+            chapter_records.append(chapter_record)
+        chapter_records.sort(key=_build_sort_key_for_position)
+        chapters = []
+        for chapter_record in chapter_records:
+            contents_path = "/chapters/{chapter_id}/contents".format(chapter_id=chapter_record["id"])
+            content_records = thinkific_client.list_collection(contents_path, [])
+            content_records.sort(key=_build_sort_key_for_position)
+            chapter_node = {
+                "chapter": chapter_record,
+                "contents": content_records,
+            }
+            chapters.append(chapter_node)
+            if chapter_progress is not None:
+                chapter_progress.advance(chapter_record["name"])
+    finally:
+        if chapter_progress is not None:
+            chapter_progress.close()
     document = {
         "course": course_record,
         "chapters": chapters,

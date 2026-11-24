@@ -76,3 +76,50 @@ def test_load_course_content_document_orders_chapters_and_contents():
     assert document["course"]["id"] == 9
     assert [node["chapter"]["id"] for node in document["chapters"]] == [3, 7]
     assert [item["id"] for item in document["chapters"][1]["contents"]] == [71, 70]
+
+
+class _RecordingChapterProgress:
+    """Records begin, advance, and close calls."""
+
+    def __init__(self):
+        """Start empty."""
+
+        self.total = None
+        self.labels = []
+        self.closed = False
+
+    def begin(self, total):
+        """Store the total step count."""
+
+        self.total = total
+
+    def advance(self, label):
+        """Append one label."""
+
+        self.labels.append(label)
+
+    def close(self):
+        """Mark the bar closed."""
+
+        self.closed = True
+
+
+def test_load_course_content_document_reports_chapter_progress():
+    """Progress advances once for the course and once per chapter in sort order."""
+
+    client = _CatalogClient(
+        collections={
+            "/chapters/7/contents": [{"id": 70, "name": "only", "position": 0}],
+            "/chapters/3/contents": [{"id": 30, "name": "solo", "position": 0}],
+        },
+        objects={
+            "/courses/9": {"id": 9, "name": "Course", "chapter_ids": [7, 3]},
+            "/chapters/7": {"id": 7, "name": "Second", "position": 2},
+            "/chapters/3": {"id": 3, "name": "First", "position": 0},
+        })
+    chapter_progress = _RecordingChapterProgress()
+    cggt.course.catalog.load_course_content_document(client, 9, chapter_progress)
+
+    assert chapter_progress.total == 3
+    assert chapter_progress.labels == ["course", "First", "Second"]
+    assert chapter_progress.closed is True

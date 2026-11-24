@@ -5,7 +5,7 @@ import json
 import cggt.entrypoint.cggt_export_course
 
 
-def _load_course_content_document(thinkific_client, course_id):
+def _load_course_content_document(thinkific_client, course_id, chapter_progress=None):
     """Return a fixed document for course 9."""
 
     assert course_id == 9

@@ -6,7 +6,9 @@
 
 ## Course Export
 
-`cggt_export_course COURSE_ID` prints one JSON document:
+`cggt_export_course COURSE_ID` prints one JSON document on stdout. While Admin API chapters and contents load, a tqdm progress bar on stderr shows `{n}/{total}` and the current step (course or chapter name).
+
+Exported JSON:
 
 - `course` — `GET /courses/{id}`
 - `chapters` — each chapter from `GET /chapters/{id}`, ordered by `position`, with `contents` from `GET /chapters/{id}/contents`, also ordered by `position`
