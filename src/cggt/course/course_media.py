@@ -106,7 +106,18 @@ def collect_video_jobs(
 
                 continue
             play_html = player_client.get_text(play_url, True)
-            wistia_id = _read_wistia_hashed_id(play_html, content_id)
+            wistia_id = _read_wistia_hashed_id(play_html)
+            if wistia_id is None:
+                # A play page that is a sign-in wall, or a lesson embedded from another player, has
+                # nothing to download. Listing it keeps the lessons after it in the export.
+                lessons_without_video.append({
+                    "content_id": content_id,
+                    "lesson_name": lesson_name,
+                    "reason": "play page has no Wistia media",
+                })
+                resolve_progress.advance(lesson_name)
+
+                continue
             media_url = WISTIA_MEDIA_URL_FORMAT.format(wistia_id=wistia_id)
             media_document = player_client.get_json(media_url, False)
             playlist_urls, progressive_url = _select_video_urls(media_document)
@@ -564,29 +575,27 @@ def _build_contentable_id_by_content_id(course_payload):
 def _read_play_url(lesson_payload):
     """Return the lesson play URL, or None when the lesson has no video."""
 
-    lesson = lesson_payload["lesson"]
-    try:
-        video_id = lesson["video_id"]
-    except KeyError:
+    # Every field here is the player's to omit: a lesson without a video, or one whose payload
+    # changed shape, is listed as having no video rather than ending the export.
+    lesson = lesson_payload.get("lesson")
+    if lesson is None:
         return None
+    video_id = lesson.get("video_id")
     if video_id is None:
         return None
-    play_url = lesson["video_url"]
+    play_url = lesson.get("video_url")
     if play_url is None or play_url == "":
         return None
 
     return play_url
 
 
-def _read_wistia_hashed_id(play_html, content_id):
-    """Return the public Wistia hashed ID embedded in the play page."""
+def _read_wistia_hashed_id(play_html):
+    """Return the public Wistia hashed ID embedded in the play page, or None when it has none."""
 
     match = _WISTIA_HASHED_ID_PATTERN.search(play_html)
     if match is None:
-        message = "play page for content ID {content_id} has no Wistia media".format(
-            content_id=content_id)
-
-        raise CourseMediaExportError(message)
+        return None
 
     return match.group(1)
 
@@ -661,8 +670,14 @@ def _build_download_filename(video_url, used_names):
     filename = os.path.basename(parsed.path)
     if filename == "":
         filename = "download.bin"
-    if filename in used_names:
-        filename = "{count}-{filename}".format(count=len(used_names), filename=filename)
-    used_names.add(filename)
+    # The numbered name a duplicate URL is given can itself be the name another URL already took, so
+    # test the name that is used rather than the one it started from: two files of one name would
+    # overwrite each other in the content directory.
+    candidate = filename
+    file_index = len(used_names)
+    while candidate in used_names:
+        candidate = "{count}-{filename}".format(count=file_index, filename=filename)
+        file_index = file_index + 1
+    used_names.add(candidate)
 
-    return filename
+    return candidate

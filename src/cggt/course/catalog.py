@@ -30,12 +30,16 @@ def load_course_list_rows(thinkific_client):
         products_by_id[product_record["id"]] = product_record
     rows = []
     for course_record in course_records:
-        product_id = course_record["product_id"]
-        product_record = products_by_id[product_id]
+        # A course whose product row is not in the collection still belongs in the list: its
+        # created-at is the only thing missing, and one such course must not end the listing.
+        product_record = products_by_id.get(course_record.get("product_id"))
+        created_at = None
+        if product_record is not None:
+            created_at = product_record.get("created_at")
         row = {
             "id": course_record["id"],
             "name": course_record["name"],
-            "created_at": product_record["created_at"],
+            "created_at": created_at,
         }
         rows.append(row)
     rows.sort(key=_build_sort_key_for_name)

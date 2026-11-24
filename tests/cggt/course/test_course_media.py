@@ -3,7 +3,10 @@
 import json
 import os
 
+import pytest
+
 import cggt.course.course_media
+import cggt.course.player_client
 
 
 def _build_course_document():
@@ -332,3 +335,168 @@ def test_collect_and_write_quiz(tmp_path):
     assert quiz_payload["quiz"]["id"] == 99
     metadata = json.loads(open(os.path.join(content_directory_path, "metadata.json"), encoding="utf-8").read())
     assert metadata["content_specific"]["question_count"] == 1
+
+
+class _UnplayableLessonClient:
+    """Returns a play page with no Wistia media for the second lesson."""
+
+    def get_json(self, url, send_cookie):
+        """Return the course player payloads, one of them unplayable."""
+
+        if url.endswith("/courses/demo"):
+            return {
+                "contents": [
+                    {"id": 11, "contentable_type": "Lesson", "contentable_id": 501},
+                    {"id": 12, "contentable_type": "Lesson", "contentable_id": 502},
+                ],
+            }
+        if url.endswith("/lessons/501"):
+            return {
+                "lesson": {"video_id": 9, "video_url": "https://creatify.thinkific.com/play/11"},
+                "videos": [{"id": 9, "identifier": "proxy-id"}],
+            }
+        if url.endswith("/lessons/502"):
+            return {
+                "lesson": {"video_id": 10, "video_url": "https://creatify.thinkific.com/play/12"},
+                "videos": [],
+            }
+        assert "abc123" in url
+
+        return _build_media_document()
+
+    def get_text(self, url, send_cookie):
+        """Return the Wistia play page for the first lesson and a sign-in wall for the second."""
+
+        if url.endswith("/play/11"):
+            return '<script src="https://fast.wistia.com/embed/medias/abc123.jsonp"></script>'
+
+        return "<html><body>Sign in to continue</body></html>"
+
+
+def test_collect_video_jobs_lists_a_lesson_whose_play_page_has_no_wistia_media():
+    """One unplayable lesson is listed, and the lessons after it still become jobs."""
+
+    jobs, lessons_without_video = cggt.course.course_media.collect_video_jobs(
+        _UnplayableLessonClient(),
+        _build_course_document(),
+        _SITE_HOST,
+        _CONTENTABLE_ID_BY_CONTENT_ID,
+        _ignore_operation,
+        _open_ignore_resolve_progress)
+
+    assert [job["content_id"] for job in jobs] == [11]
+    assert lessons_without_video == [
+        {"content_id": 12, "lesson_name": "No Video", "reason": "play page has no Wistia media"},
+        {
+            "content_id": 14,
+            "lesson_name": "Not In Player",
+            "reason": "missing contentable_id in course player (enrollment may be required)",
+        },
+    ]
+
+
+class _LessonPayloadWithoutLessonObjectClient:
+    """Returns a lesson payload that has no lesson object at all."""
+
+    def get_json(self, url, send_cookie):
+        """Return the course player payloads, one of them empty."""
+
+        if url.endswith("/courses/demo"):
+            return {"contents": [{"id": 11, "contentable_type": "Lesson", "contentable_id": 501}]}
+        if url.endswith("/lessons/501"):
+            return {}
+
+        raise AssertionError("unexpected URL " + url)
+
+    def get_text(self, url, send_cookie):
+        """Return a play page, which this client must never be asked for."""
+
+        raise AssertionError("unexpected play page fetch " + url)
+
+
+def test_collect_video_jobs_lists_a_lesson_with_no_lesson_object():
+    """A changed payload shape is a lesson without a video, not the end of the export."""
+
+    jobs, lessons_without_video = cggt.course.course_media.collect_video_jobs(
+        _LessonPayloadWithoutLessonObjectClient(),
+        _build_course_document(),
+        _SITE_HOST,
+        {11: 501},
+        _ignore_operation,
+        _open_ignore_resolve_progress)
+
+    assert jobs == []
+    assert lessons_without_video == [
+        {"content_id": 11, "lesson_name": "With Video"},
+        {
+            "content_id": 12,
+            "lesson_name": "No Video",
+            "reason": "missing contentable_id in course player (enrollment may be required)",
+        },
+        {
+            "content_id": 14,
+            "lesson_name": "Not In Player",
+            "reason": "missing contentable_id in course player (enrollment may be required)",
+        },
+    ]
+
+
+class _ShortBodyClient(_FakePlayerClient):
+    """A player client whose downloads end before the length they declared."""
+
+    def download_file(self, url, destination_filepath, on_chunk, send_cookie=False):
+        """Write part of the body, then report the transfer as cut short."""
+
+        on_chunk(0, 4096)
+        with open(destination_filepath, "w", encoding="utf-8") as destination_file:
+            destination_file.write("data")
+        on_chunk(4, None)
+
+        raise cggt.course.player_client.IncompleteDownloadError(
+            "{url} gave 4 of 4096 bytes".format(url=url))
+
+
+def test_download_video_files_leaves_no_content_directory_when_a_file_is_cut_short(tmp_path):
+    """A cut-short download leaves nothing behind, so the next run downloads that content again."""
+
+    output_directory_path = str(tmp_path)
+    client = _FakePlayerClient()
+    jobs, _lessons_without_video = cggt.course.course_media.collect_video_jobs(
+        client,
+        _build_course_document(),
+        _SITE_HOST,
+        _CONTENTABLE_ID_BY_CONTENT_ID,
+        _ignore_operation,
+        _open_ignore_resolve_progress)
+
+    with pytest.raises(cggt.course.player_client.IncompleteDownloadError, match="4 of 4096 bytes"):
+        cggt.course.course_media.download_video_files(
+            _ShortBodyClient(),
+            jobs[0],
+            output_directory_path,
+            _RecordingProgress(),
+            _ignore_operation)
+
+    assert os.path.isdir(os.path.join(output_directory_path, "videos", "11")) is False
+    assert cggt.course.course_media.is_content_directory_present(
+        output_directory_path,
+        cggt.course.course_media.MEDIA_KIND_VIDEOS,
+        11) is False
+
+
+def test_build_download_filename_steps_past_a_numbered_name_already_taken():
+    """A duplicate URL never takes a name another URL already has, whatever the order."""
+
+    used_names = set()
+    video_urls = [
+        "https://cdn.example/one/a.m3u8",
+        "https://cdn.example/two/a.m3u8",
+        "https://cdn.example/three/3-a.m3u8",
+        "https://cdn.example/four/a.m3u8",
+    ]
+    filenames = [
+        cggt.course.course_media._build_download_filename(video_url, used_names)
+        for video_url in video_urls
+    ]
+
+    assert filenames == ["a.m3u8", "1-a.m3u8", "3-a.m3u8", "4-a.m3u8"]

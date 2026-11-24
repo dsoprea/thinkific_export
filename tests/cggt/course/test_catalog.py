@@ -49,6 +49,28 @@ def test_load_course_list_rows_sorts_by_name_and_uses_product_created_at():
     ]
 
 
+def test_load_course_list_rows_keeps_a_course_whose_product_is_missing():
+    """A course with no product row is listed with a blank created-at, not dropped or fatal."""
+
+    client = _CatalogClient(
+        collections={
+            "/courses": [
+                {"id": 2, "name": "zeta", "product_id": 20},
+                {"id": 1, "name": "Alpha", "product_id": 10},
+            ],
+            "/products": [
+                {"id": 10, "created_at": "2020-01-01T00:00:00Z"},
+            ],
+        },
+        objects={})
+    rows = cggt.course.catalog.load_course_list_rows(client)
+
+    assert rows == [
+        {"id": 1, "name": "Alpha", "created_at": "2020-01-01T00:00:00Z"},
+        {"id": 2, "name": "zeta", "created_at": None},
+    ]
+
+
 def test_load_course_content_document_orders_chapters_and_contents():
     """Chapters and contents are nested and ordered by position."""
 
