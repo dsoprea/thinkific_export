@@ -7,6 +7,8 @@ THINKIFIC_API_ACCESS_TOKEN_ENVIRONMENT_NAME = "THINKIFIC_API_ACCESS_TOKEN"
 THINKIFIC_SSO_SIGNING_SECRET_ENVIRONMENT_NAME = "THINKIFIC_SSO_SIGNING_SECRET"
 THINKIFIC_API_BASE_URL = "https://api.thinkific.com/api/public/v1"
 THINKIFIC_PAGE_LIMIT = 250
+# A stalled connection with no timeout would hold a listing open forever, so every request gives up.
+THINKIFIC_REQUEST_TIMEOUT_SECONDS = 120
 
 
 def load_thinkific_credentials():

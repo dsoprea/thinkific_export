@@ -41,13 +41,23 @@ class ThinkificClient:
             },
             method="GET")
         try:
-            response = urllib.request.urlopen(request)
+            response = urllib.request.urlopen(
+                request,
+                timeout=cggt.config.thinkific.THINKIFIC_REQUEST_TIMEOUT_SECONDS)
         except urllib.error.HTTPError as error:
             error_body = error.read().decode("utf-8")
             message = "Thinkific API HTTP {status} for {url}: {body}".format(
                 status=error.code,
                 url=url,
                 body=error_body)
+            _LOGGER.error(message)
+
+            raise ThinkificApiError(message) from error
+        except urllib.error.URLError as error:
+            # A refused connection, a stalled read, or a name that does not resolve: no status code.
+            message = "Thinkific API request for {url} failed: {reason}".format(
+                url=url,
+                reason=error.reason)
             _LOGGER.error(message)
 
             raise ThinkificApiError(message) from error
@@ -73,6 +83,14 @@ class ThinkificClient:
             items.extend(page_items)
             next_page = payload["meta"]["pagination"]["next_page"]
             if next_page is None:
+                break
+            if next_page == page_number:
+                # A page that names itself as its successor would fetch the same rows forever.
+                _LOGGER.warning(
+                    "Thinkific API returned page %s as its own next page for %s; stopping the listing",
+                    page_number,
+                    resource_path)
+
                 break
             page_number = next_page
 

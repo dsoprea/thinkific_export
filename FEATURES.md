@@ -2,7 +2,7 @@
 
 ## Course List
 
-`cggt_course_list` loads every course and every product from the Thinkific Admin API. It prints course ID, name, and the linked product `created_at`, sorted by name. Course records themselves do not include timestamps.
+`cggt_course_list` loads every course and every product from the Thinkific Admin API. It prints course ID, name, and the linked product `created_at`, sorted by name. Course records themselves do not include timestamps. A course whose product is not in the product collection is still listed, with a blank `created_at`.
 
 ## Course Export
 
@@ -23,6 +23,6 @@ Exported JSON:
 | PDF | `documents/{content_id}/` | `document` + extension from the CDN URL, `metadata.json` |
 | Quiz | `quizzes/{content_id}/` | `quiz.json` (full player payload), `metadata.json` |
 
-`metadata.json` in each content directory lists shared fields (`content_id`, `name`, `contentable_type`, `contentable_id`, optional `chapter_id`) and a `content_specific` object for type-only fields (for example Wistia ID, PDF URL, quiz question count). A content-ID directory that already has files is skipped. `videos/wistia/` stores each Wistia media JSON (replaced when present) and `content_id_to_wistia_urls.json` (merged when present). Lesson video downloads show a tqdm bar labeled `{n}/{total} {lesson name}` for progressive files; M3U8 downloads do not advance that bar. Lessons with no video and unresolved PDFs or quizzes are listed on stderr.
+`metadata.json` in each content directory lists shared fields (`content_id`, `name`, `contentable_type`, `contentable_id`, optional `chapter_id`) and a `content_specific` object for type-only fields (for example Wistia ID, PDF URL, quiz question count). A content-ID directory that already has files is skipped. `videos/wistia/` stores each Wistia media JSON (replaced when present) and `content_id_to_wistia_urls.json` (merged when present). Lesson video downloads show a tqdm bar labeled `{n}/{total} {lesson name}` for progressive files; M3U8 downloads do not advance that bar. Lessons with no video, lessons whose play page carries no Wistia media, and unresolved PDFs or quizzes are listed on stderr, and the export carries on past them. A download whose body ends before the Content-Length it declared is refused, before its content directory is created, so the next run downloads that content again.
 
 Optional flags `--videos`, `--documents`, and `--quizzes` limit which kinds run. When any flag is present, only the selected kinds run; with no flags, all three run.

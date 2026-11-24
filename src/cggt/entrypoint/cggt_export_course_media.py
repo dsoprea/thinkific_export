@@ -94,15 +94,15 @@ def main(argv=None):
     parser.add_argument(
         "--videos",
         action="store_true",
-        help="Download lesson videos only when combined with other --* kind flags.")
+        help="Download lesson videos. With no kind flag, every kind runs.")
     parser.add_argument(
         "--quizzes",
         action="store_true",
-        help="Download quiz JSON only when combined with other --* kind flags.")
+        help="Download quiz JSON. With no kind flag, every kind runs.")
     parser.add_argument(
         "--documents",
         action="store_true",
-        help="Download PDF documents only when combined with other --* kind flags.")
+        help="Download PDF documents. With no kind flag, every kind runs.")
     parsed_arguments = parser.parse_args(argv)
     enabled_media_kinds = _resolve_enabled_media_kinds(parsed_arguments)
     _report_operation("reading {filepath}".format(filepath=parsed_arguments.session_filepath))
